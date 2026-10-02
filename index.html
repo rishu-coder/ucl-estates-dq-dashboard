@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Estates Data Quality Dashboard</title>
+<style>
+:root{--bg:#f3f1f7;--card:#fff;--ink:#1c1a24;--mut:#645f72;--line:#e2dfeb;--acc:#500778;--ok:#17724a;--warn:#9a6700;--bad:#bf3326}
+@media(prefers-color-scheme:dark){:root{--bg:#16131c;--card:#201c29;--ink:#efedf4;--mut:#a59fb3;--line:#352f41;--acc:#c9a0ee;--ok:#4cc38a;--warn:#e0b04f;--bad:#f27d6e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:28px 16px 56px}
+h1{font-size:1.75rem;line-height:1.2;margin:0 0 6px;letter-spacing:-.01em}
+h2{font-size:1.05rem;margin:0 0 12px}
+a{color:var(--acc)}
+.mut,.sub{color:var(--mut)}
+.banner{border-left:4px solid var(--acc);padding:8px 14px;margin:14px 0;font-size:.9rem;color:var(--mut);max-width:75ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:12px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin:14px 0 12px}
+.grid .card{margin:0}
+.kpi b{display:block;font-size:2rem;line-height:1.1}
+.kpi span{color:var(--mut);font-size:.85rem}
+.row{display:grid;grid-template-columns:110px 1fr 56px;gap:12px;align-items:center;margin:8px 0}
+.row b{text-align:right}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden;min-width:80px}
+.bar i{display:block;height:100%}
+.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.875rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:600}
+td .bar{display:inline-block;width:70px;margin-left:8px;vertical-align:middle}
+.sev{padding:1px 9px;border-radius:10px;font-size:.8rem;font-weight:600;border:1px solid currentColor}
+.High{color:var(--bad)}.Medium{color:var(--warn)}.Low{color:var(--ok)}
+.lnk{all:unset;cursor:pointer;color:var(--acc);text-decoration:underline}
+.lnk:focus-visible,.btn:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.btn{margin-top:12px;background:var(--acc);color:var(--bg);border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
+select{font:inherit;padding:4px 8px;margin-left:6px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+</style>
+</head>
+<body>
+<main>
+<h1>Estates data quality dashboard</h1>
+<p class="banner">All data is synthetic, generated in your browser from a fixed seed, so results are reproducible. It is not UCL data. The rules cover an IWMS asset register, planned maintenance (PPM) schedule references, and Common Data Environment (CDE) document metadata with ISO 19650-style file naming.</p>
+<label class="sub">Show system<select id="sys"><option>All</option><option>IWMS assets</option><option>CDE documents</option></select></label>
+<div class="grid" id="kpis"></div>
+<section class="card"><h2>Score by data quality dimension</h2><div id="dims"></div></section>
+<section class="card"><h2>Rules, worst first</h2>
+<div class="scroll"><table><thead><tr><th>ID</th><th>Dimension</th><th>System</th><th>Rule (select for detail)</th><th>Pass rate</th><th>Fails</th><th>Severity</th></tr></thead><tbody id="rules"></tbody></table></div></section>
+<section class="card" id="detail"></section>
+</main>
+<script>
+// ---- Reproducible synthetic data (swap these two arrays for real CSV exports) ----
+const rnd=(a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296})(2026);
+const int=n=>Math.floor(rnd()*n),pick=a=>a[int(a.length)],chance=p=>rnd()<p;
+const ago=d=>{const x=new Date();x.setDate(x.getDate()-d);return x.toISOString().slice(0,10)};
+const age=d=>(Date.now()-new Date(d))/864e5;
+const BL=['BLD-01','BLD-02','BLD-03','BLD-04','BLD-05'];
+const CAT={AHU:'Mechanical',Boiler:'Mechanical',Pump:'Mechanical',Chiller:'Mechanical','Fire alarm':'Fire & Life Safety',Lift:'Vertical Transport'};
+const S20=['S20-001','S20-014','S20-027','S20-033','S20-048']; // placeholders: map to your licensed SFG20 codes
+const assets=Array.from({length:420},(_,i)=>{
+  const cat=pick(Object.keys(CAT)),inst=400+int(3000);
+  const a={id:'AST-'+String(i+1).padStart(4,'0'),tag:'T'+(1000+i),cat,bld:BL[i%5],room:'R'+(100+int(90)),inst:ago(inst),svc:ago(int(300)),ppm:pick(S20),owner:CAT[cat]};
+  if(chance(.06))a.bld='';
+  if(chance(.11))a.room='';
+  if(chance(.08))a.inst='';else if(chance(.05))a.inst=ago(-1-int(400));
+  if(chance(.09))a.ppm=pick(['','S20-999','TBC']);
+  if(chance(.07))a.svc=ago(400+int(500));
+  if(a.inst&&chance(.04))a.svc=ago(inst+30);
+  return a;
+});
+for(let i=0;i<14;i++)assets[400+i].tag=assets[i].tag; // injected duplicate tags
+const ST=['S0','S1','S2','S3','S4','A1','A2'],TY=['DR','SP','RP','SH','M3'],LV=['00','01','02','B1','ZZ'];
+const NAME_RE=/^[A-Z0-9]{2,6}-[A-Z0-9]{3,6}-[A-Z0-9]{2}-[A-Z0-9]{2}-[A-Z0-9]{2}-[A-Z]-\d{4}$/; // Project-Originator-Volume-Level-Type-Role-Number
+const docs=Array.from({length:300},(_,i)=>{
+  const num=String(i+1).padStart(4,'0');
+  const d={name:`UCL1-EST-${pick(['ZZ','XX'])}-${pick(LV)}-${pick(TY)}-${pick(['A','C','M','E','S'])}-${num}`,num,status:pick(ST),rev:'P0'+(1+int(4)),owner:pick(['Capital Projects','Space Planning','Maintenance'])};
+  if(chance(.12))d.name=pick(['Plan v2 FINAL','scan_'+num,'UCL1-EST-01-DR-'+num,'ucl1_est_zz_01_dr_a_'+num]);
+  if(chance(.1))d.status='';
+  if(chance(.07))d.rev='';
+  if(chance(.05))d.num='0000';
+  return d;
+});
+for(let i=0;i<9;i++)docs[290+i]={...docs[i],rev:'P01'}; // injected re-uploads
+
+// ---- Rule engine: [id, dimension, description, records, passTest, rootCause, fix, owner, appliesTo] ----
+const cnt=(a,k)=>a.reduce((m,x)=>(m[x[k]]=(m[x[k]]||0)+1,m),{});
+const AT=cnt(assets,'tag'),DN=cnt(docs,'name'),SYS={A:'IWMS assets',D:'CDE documents'};
+const rules=[
+['A1','Completeness','Building code populated',assets,a=>a.bld,'Optional column in the bulk-upload template','Make the field mandatory and back-fill from the space register','Estates Data'],
+['A2','Completeness','Room or location populated',assets,a=>a.room,'Assets created on site before space data was loaded','Join to the room register on asset tag; require location at handover','FM Operations'],
+['A3','Completeness','Install date populated',assets,a=>a.inst,'Legacy migration dropped commissioning dates','Source from O&M manuals and project close-out; add a handover check','Capital Projects'],
+['A4','Uniqueness','Asset tag is unique',assets,a=>AT[a.tag]===1,'Same asset loaded from two sources','Match and merge on tag plus serial number; add a unique constraint','Estates Data'],
+['A5','Validity','Install date is not in the future',assets,a=>!a.inst||age(a.inst)>=0,'Manual date entry or day/month swaps','Add date-range validation at entry','FM Operations'],
+['A6','Validity','PPM schedule code is in the SFG20 reference list',assets,a=>S20.includes(a.ppm),'Free-text schedule codes; list not enforced','Replace free text with a picklist mapped to SFG20','Maintenance'],
+['A7','Consistency','Last service is after install date',assets,a=>!a.inst||a.svc>=a.inst,'Install dates overwritten during migration','Reconcile against work-order history and flag for review','Estates Data'],
+['A8','Timeliness','Serviced in the last 12 months',assets,a=>age(a.svc)<=365,'Work orders closed without updating the asset record','Update last-service on job completion; send a monthly exception report','Maintenance'],
+['D1','Validity','File name follows the ISO 19650-style convention',docs,d=>NAME_RE.test(d.name),'Uploads bypass the naming check','Enforce the naming rule at upload in the CDE and publish a naming guide','Capital Projects'],
+['D2','Completeness','Suitability status populated',docs,d=>d.status,'Status not required for work-in-progress uploads','Make status mandatory in the CDE metadata template','Capital Projects'],
+['D3','Completeness','Revision populated',docs,d=>d.rev,'Revision left blank when files are re-uploaded','Generate the revision automatically on version upload','Space Planning'],
+['D4','Uniqueness','Document name is unique',docs,d=>DN[d.name]===1,'Files re-uploaded instead of versioned','Block duplicate names and supersede old files','Space Planning'],
+['D5','Consistency','Metadata number matches file name',docs,d=>d.name.endsWith('-'+d.num),'Metadata keyed by hand','Derive metadata from the file name on upload','Maintenance',d=>NAME_RE.test(d.name)]
+];
+const res=rules.map(([id,dim,desc,rows,ok,cause,fix,owner,when])=>{
+  const set=when?rows.filter(when):rows,fails=set.filter(r=>!ok(r)),pass=1-fails.length/set.length,rate=1-pass;
+  return{id,dim,desc,cause,fix,owner,sys:SYS[id[0]],fails,total:set.length,pass,sev:rate>=.1?'High':rate>=.05?'Medium':'Low'};
+});
+
+// ---- UI ----
+const $=id=>document.getElementById(id),DIMS=['Completeness','Validity','Uniqueness','Consistency','Timeliness'];
+const avg=a=>a.reduce((s,x)=>s+x,0)/a.length,pc=v=>(v*100).toFixed(1)+'%',cls=s=>s>=.95?'ok':s>=.9?'warn':'bad';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let sys='All',sel=null;
+function render(){
+  const rs=res.filter(r=>sys==='All'||r.sys===sys).sort((a,b)=>a.pass-b.pass);
+  const recs=sys==='All'?assets.length+docs.length:sys==='IWMS assets'?assets.length:docs.length;
+  $('kpis').innerHTML=[[pc(avg(rs.map(r=>r.pass))),'Overall score (mean rule pass rate)'],[recs,'Records assessed'],[rs.reduce((s,r)=>s+r.fails.length,0),'Failed checks'],[rs.filter(r=>r.sev==='High').length,'High-severity rules']].map(([v,l])=>`<div class="card kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('dims').innerHTML=DIMS.map(d=>{const x=rs.filter(r=>r.dim===d);if(!x.length)return'';const s=avg(x.map(r=>r.pass));return`<div class="row"><span>${d}</span><div class="bar"><i class="${cls(s)}" style="width:${pc(s)}"></i></div><b>${pc(s)}</b></div>`}).join('');
+  $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td>${r.dim}</td><td>${r.sys}</td><td><button class="lnk" data-id="${r.id}">${esc(r.desc)}</button></td><td>${pc(r.pass)}<div class="bar"><i class="${cls(r.pass)}" style="width:${pc(r.pass)}"></i></div></td><td>${r.fails.length} of ${r.total}</td><td><span class="sev ${r.sev}">${r.sev}</span></td></tr>`).join('');
+  detail();
+}
+function detail(){
+  const r=res.find(x=>x.id===sel),el=$('detail');
+  if(!r){el.innerHTML='<p class="mut">Select a rule above to see its likely root cause, the recommended fix, the data owner and the failing records.</p>';return}
+  const cols=Object.keys(r.fails[0]||{});
+  el.innerHTML=`<h2>${r.id}: ${esc(r.desc)}</h2><p><b>Likely root cause:</b> ${esc(r.cause)}<br><b>Recommended fix:</b> ${esc(r.fix)}<br><b>Data owner:</b> ${esc(r.owner)}<br><b>Result:</b> ${r.fails.length} of ${r.total} records fail</p>
+<div class="scroll"><table><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>${r.fails.slice(0,8).map(f=>`<tr>${cols.map(c=>`<td>${esc(f[c]||'(blank)')}</td>`).join('')}</tr>`).join('')}</table></div>
+<button class="btn" id="csv">Download ${r.fails.length} failing records as CSV</button>`;
+  $('csv').onclick=()=>{
+    const t=[cols.join(','),...r.fails.map(f=>cols.map(c=>`"${String(f[c]).replace(/"/g,'""')}"`).join(','))].join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download=`dq_${r.id}_failures.csv`;a.click();
+  };
+}
+$('rules').onclick=e=>{const b=e.target.closest('button');if(b){sel=b.dataset.id;detail();$('detail').scrollIntoView({behavior:'smooth',block:'nearest'})}};
+$('sys').onchange=e=>{sys=e.target.value;sel=null;render()};
+render();
+</script>
+</body>
+</html>
